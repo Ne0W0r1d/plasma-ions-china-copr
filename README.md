@@ -1,9 +1,107 @@
+# Plasma Ions China — COPR packaging
+
+This repository contains the [COPR](https://copr.fedorainfracloud.org/) packaging for
+[arenekosreal/plasma-ions-china](https://github.com/arenekosreal/plasma-ions-china).
+Only the RPM spec, COPR metadata, README and license are kept here; the source
+archive is downloaded from the upstream GitHub repository during the build.
+
+The upstream project description and developer documentation are preserved at
+the bottom of this file.
+
+## Build targets
+
+| Distribution | Chroots |
+| --- | --- |
+| Fedora 44 | `fedora-44-x86_64`, `fedora-44-aarch64` |
+| Fedora Rawhide | `fedora-rawhide-x86_64`, `fedora-rawhide-aarch64` |
+| openSUSE Tumbleweed | `opensuse-tumbleweed-x86_64`, `opensuse-tumbleweed-aarch64` |
+
+The chroot list lives in `copr/chroots.txt` and is the single source of truth for
+both the setup script and the GitHub Actions workflow.
+
+## Local build
+
+The source RPM can be created without installing the package build
+dependencies. You only need the RPM build tools (`rpm-build`, plus `curl` or
+`rpmdevtools`):
+
+```bash
+ci/build-srpm.sh plasma-ions-china.spec out/
+```
+
+Or use the COPR Makefile method:
+
+```bash
+make -f .copr/Makefile srpm outdir=out
+```
+
+Submit the result with:
+
+```bash
+copr-cli build owner/plasma-ions-china -r fedora-rawhide-x86_64 out/plasma-ions-china-*.src.rpm
+```
+
+## COPR setup
+
+1. Create the COPR project with all required chroots:
+
+   ```bash
+   copr/setup-project.sh owner/plasma-ions-china
+   ```
+
+   The script is idempotent and adds the chroots to an existing project.
+
+2. Add these GitHub repository settings:
+
+   - Variable `COPR_PROJECT`: the project name, for example `owner/plasma-ions-china`.
+   - Secret `COPR_API_TOKEN`: the full contents of your `~/.config/copr` file.
+
+3. Allow GitHub Actions to push to `main` (or adjust the workflow to open a pull
+   request instead). The workflow commits updated version and release metadata
+   back to the repository.
+
+## Automation
+
+`.github/workflows/copr.yml` runs on every push to `main`, on a daily schedule
+and on manual dispatch. On each run it:
+
+1. Resolves the upstream `main` commit and the newest release tag. Commits after
+   the tag are packaged as `X.Y.Z^YYYYMMDDHHMMSSgitHASH` snapshots, so every
+   mainline update is picked up.
+2. Checks the current KDE Plasma version from download.kde.org, Fedora 44,
+   Fedora Rawhide and openSUSE Factory.
+3. Updates `Version`, `%global commit`, the source checksum and `Release` in the
+   spec when needed, and stores the last seen versions in `packaging/state.json`.
+4. Builds a source RPM and submits it to COPR for all chroots in
+   `copr/chroots.txt`.
+
+The scheduled run only submits a build when the upstream `main` commit or a KDE
+version changes. A manual dispatch always submits a build. Commits made by the
+workflow use the `[skip ci]` marker, so the workflow does not loop on its own
+push.
+
+## Packaging notes
+
+- Only the `nmccn` ion is built. The `qweather` ion needs per-user QWeather API
+  credentials at configure time, so it is skipped by upstream CMake when those
+  credentials are absent.
+- The package uses the system `libplasmaweatherion` headers from
+  `kdeplasma-addons-devel` / `kdeplasma6-addons-devel` instead of downloading
+  the kdeplasma-addons tarball during the build.
+- Legacy ions for KDE < 6.5 are disabled.
+
+---
+
 # Plasma Weather China Sources
+
+> This section is the upstream README, kept for reference. The source tree is
+> not part of this packaging repository; see the upstream project for building
+> from source.
 
 <p align="center">
    <br>
-   <img src="./image/search.png" alt="Search Weather Station" height="300" />
-   <img src="./image/weather.png" alt="Weather Report Page" height="300" />
+   <img src="https://raw.githubusercontent.com/arenekosreal/plasma-ions-china/main/image/search.png" alt="Search Weather Station" height="300" />
+   <img src="https://raw.githubusercontent.com/arenekosreal/plasma-ions-china/main/image/weather.png" alt="Weather Report Page" height="300" />
    <br>
 </p>
 

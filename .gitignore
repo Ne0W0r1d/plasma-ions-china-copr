@@ -1,7 +1,4 @@
-.cache
 /build/
-/.clang-format
-*.pem
-*.key
-# Backup files
-*~
+/out/
+/*.src.rpm
+/*.tar.gz

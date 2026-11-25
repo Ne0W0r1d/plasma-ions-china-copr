@@ -1,0 +1,11 @@
+# Fedora 44
+fedora-44-aarch64
+fedora-44-x86_64
+
+# Fedora Rawhide
+fedora-rawhide-aarch64
+fedora-rawhide-x86_64
+
+# openSUSE Tumbleweed
+opensuse-tumbleweed-aarch64
+opensuse-tumbleweed-x86_64
