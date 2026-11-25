@@ -22,9 +22,9 @@ instructions="Install with: sudo dnf copr enable ${project}"
 
 if copr-cli get "$project" >/dev/null 2>&1; then
     echo "Updating chroots for ${project}..." >&2
-    copr-cli modify "$project" "${chroots[@]}" \
-        --description "$description" \
-        --instructions "$instructions" >&2
+    # Only touch the chroot list here. Description and instructions are owned
+    # by the project maintainer and must not be overwritten on every CI run.
+    copr-cli modify "$project" "${chroots[@]}" >&2
 else
     echo "Creating ${project}..." >&2
     copr-cli create "$project" "${chroots[@]}" \
