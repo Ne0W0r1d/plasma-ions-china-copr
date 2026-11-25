@@ -1,6 +1,8 @@
 # Fedora 44
 fedora-44-aarch64
 fedora-44-x86_64
+fedora-45-aarch64
+fedora-45-x86_64
 
 # Fedora Rawhide
 fedora-rawhide-aarch64
