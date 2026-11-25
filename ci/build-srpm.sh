@@ -28,6 +28,15 @@ trap 'rm -rf "$workdir"' EXIT
 
 mkdir -p "$workdir/build" "$workdir/buildroot"
 cp "$spec" "$workdir/$spec_name"
+# COPR rebuilds the SRPM in the target chroot and re-expands the spec there.
+# A command-line macro would not survive that step, so bake the Plasma version
+# into the temporary spec instead. %{?dist} is intentionally left unexpanded so
+# the target chroot supplies its own dist tag.
+if ! grep -q '^Release:' "$workdir/$spec_name"; then
+    echo "error: spec has no Release tag" >&2
+    exit 1
+fi
+sed -i "s|^Release:.*|Release:        ${plasma_version}%{?dist}|" "$workdir/$spec_name"
 
 echo "Downloading sources..." >&2
 if command -v spectool >/dev/null 2>&1; then
@@ -77,7 +86,6 @@ if [[ -n "$expected" ]]; then
 fi
 
 rpmbuild -bs "$workdir/$spec_name" \
-    --define "plasma_version $plasma_version" \
     --define "_sourcedir $workdir" \
     --define "_builddir $workdir/build" \
     --define "_buildrootdir $workdir/buildroot" \
