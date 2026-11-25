@@ -25,6 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = ROOT / "plasma-ions-china.spec"
 STATE = ROOT / "packaging" / "state.json"
+CHROOTS = ROOT / "copr" / "chroots.txt"
 
 UPSTREAM_REPO = "arenekosreal/plasma-ions-china"
 USER_AGENT = "plasma-ions-china-copr-ci/1.0"
@@ -149,31 +150,55 @@ def latest_kde_stable() -> str:
     return max(versions, key=version_key)
 
 
-def fedora_kde(release: str) -> str:
-    payload = json.loads(fetch_text(f"https://mdapi.fedoraproject.org/{release}/pkg/kdeplasma-addons"))
+def fedora_plasma(release: str) -> str:
+    payload = json.loads(fetch_text(f"https://mdapi.fedoraproject.org/{release}/pkg/plasma-workspace"))
     version = payload.get("version")
     if not version:
-        raise RuntimeError(f"kdeplasma-addons has no version in Fedora {release}")
+        raise RuntimeError(f"plasma-workspace has no version in Fedora {release}")
     return str(version)
 
 
-def opensuse_kde() -> str:
+def opensuse_plasma() -> str:
     history = fetch_text(
-        "https://api.opensuse.org/public/source/openSUSE:Factory/kdeplasma6-addons/_history?limit=1"
+        "https://api.opensuse.org/public/source/openSUSE:Factory/plasma6-workspace/_history?limit=1"
     )
     match = re.search(r"<version>([^<]+)</version>", history)
     if not match:
-        raise RuntimeError("could not find kdeplasma6-addons version in openSUSE:Factory")
+        raise RuntimeError("could not find plasma6-workspace version in openSUSE:Factory")
     return match.group(1).strip()
 
 
+def read_chroots() -> list[str]:
+    chroots = []
+    if not CHROOTS.exists():
+        return chroots
+    for line in CHROOTS.read_text(encoding="utf-8").splitlines():
+        chroot = line.split("#", 1)[0].strip()
+        if chroot:
+            chroots.append(chroot)
+    return chroots
+
+
+def chroot_plasma_checks() -> dict[str, object]:
+    chroots = read_chroots()
+    checks: dict[str, object] = {"stable": latest_kde_stable}
+
+    fedora_releases = set()
+    for chroot in chroots:
+        match = re.match(r"fedora-(\d+)-", chroot)
+        if match:
+            fedora_releases.add(match.group(1))
+    for release in sorted(fedora_releases, key=int):
+        checks[f"fedora_{release}"] = lambda release=release: fedora_plasma(f"f{release}")
+    if any(chroot.startswith("fedora-rawhide-") for chroot in chroots):
+        checks["fedora_rawhide"] = lambda: fedora_plasma("rawhide")
+    if any(chroot.startswith("opensuse-tumbleweed-") for chroot in chroots):
+        checks["opensuse_factory"] = opensuse_plasma
+    return checks
+
+
 def detect_kde(previous: dict[str, str]) -> dict[str, str]:
-    checks = {
-        "stable": latest_kde_stable,
-        "fedora_44": lambda: fedora_kde("f44"),
-        "fedora_rawhide": lambda: fedora_kde("rawhide"),
-        "opensuse_factory": opensuse_kde,
-    }
+    checks = chroot_plasma_checks()
     result = {}
     for key, check in checks.items():
         try:
@@ -189,7 +214,6 @@ def parse_spec(text: str) -> dict[str, str]:
         "version": r"^Version:\s*(\S+)",
         "cmake_version": r"^%global upstream_version\s+(\S+)",
         "commit": r"^%global commit\s+(\S+)",
-        "release": r"^Release:\s*(\S+)",
         "sha256": r"^# Source0 SHA256:\s*(\S+)",
     }
     parsed = {}
@@ -246,17 +270,6 @@ def main() -> int:
     sha_changed = spec["sha256"] != upstream["sha256"]
     kde_changed = bool(previous_state) and previous_kde != kde
 
-    release_match = re.fullmatch(r"(\d+)(.*)", spec["release"])
-    if not release_match:
-        raise RuntimeError(f"unexpected Release value: {spec['release']}")
-    release_number = int(release_match.group(1))
-    release_suffix = release_match.group(2)
-
-    if version_changed or cmake_version_changed:
-        release_number = 1
-    elif commit_changed or sha_changed or kde_changed:
-        release_number += 1
-
     updated = spec_text
     if version_changed:
         updated = replace_field(updated, r"^(Version:\s*)\S+", upstream["version"])
@@ -270,13 +283,6 @@ def main() -> int:
         updated = replace_field(updated, r"^(%global commit\s+)\S+", upstream["commit"])
     if sha_changed:
         updated = replace_field(updated, r"^(# Source0 SHA256:\s*)\S+", upstream["sha256"])
-    if release_number != int(release_match.group(1)):
-        updated = replace_field(
-            updated,
-            r"^(Release:\s*)\S+",
-            f"{release_number}{release_suffix}",
-        )
-
     new_state = {
         "schema": 1,
         "upstream": {
@@ -294,7 +300,7 @@ def main() -> int:
     spec_changed = updated != spec_text
     state_changed = not STATE.exists() or STATE.read_text(encoding="utf-8") != state_text
 
-    if spec_changed:
+    if spec_changed or state_changed:
         changes = []
         if version_changed:
             kind = "snapshot" if upstream["snapshot"] else "tag"
@@ -302,8 +308,8 @@ def main() -> int:
         if kde_changed:
             changes.append("KDE update")
         if not changes:
-            changes.append("source refresh")
-        summary = f"{', '.join(changes)} (release {release_number})"
+            changes.append("state update")
+        summary = ", ".join(changes)
     else:
         summary = f"up to date ({upstream['tag']})"
 
@@ -319,7 +325,13 @@ def main() -> int:
 
     write_github_output(
         changed=str(spec_changed or state_changed).lower(),
-        rebuild=str(spec_changed).lower(),
+        rebuild=str(
+            version_changed
+            or cmake_version_changed
+            or commit_changed
+            or sha_changed
+            or kde_changed
+        ).lower(),
         summary=summary,
     )
     return 0

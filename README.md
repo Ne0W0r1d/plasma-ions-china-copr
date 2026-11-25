@@ -13,6 +13,7 @@ the bottom of this file.
 | Distribution | Chroots |
 | --- | --- |
 | Fedora 44 | `fedora-44-x86_64`, `fedora-44-aarch64` |
+| Fedora 45 | `fedora-45-x86_64`, `fedora-45-aarch64` |
 | Fedora Rawhide | `fedora-rawhide-x86_64`, `fedora-rawhide-aarch64` |
 | openSUSE Tumbleweed | `opensuse-tumbleweed-x86_64`, `opensuse-tumbleweed-aarch64` |
 
@@ -26,7 +27,11 @@ dependencies. You only need the RPM build tools (`rpm-build`, plus `curl` or
 `rpmdevtools`):
 
 ```bash
+# Auto-detects the host Plasma version
 ci/build-srpm.sh plasma-ions-china.spec out/
+
+# Or set it explicitly
+PLASMA_VERSION=6.8.3 ci/build-srpm.sh plasma-ions-china.spec out/
 ```
 
 Or use the COPR Makefile method:
@@ -68,12 +73,12 @@ and on manual dispatch. On each run it:
 1. Resolves the upstream `main` commit and the newest release tag. Commits after
    the tag are packaged as `X.Y.Z^YYYYMMDDHHMMSSgitHASH` snapshots, so every
    mainline update is picked up.
-2. Checks the current KDE Plasma version from download.kde.org, Fedora 44,
-   Fedora Rawhide and openSUSE Factory.
-3. Updates `Version`, `%global commit`, the source checksum and `Release` in the
-   spec when needed, and stores the last seen versions in `packaging/state.json`.
-4. Builds a source RPM and submits it to COPR for all chroots in
-   `copr/chroots.txt`.
+2. Checks the current KDE Plasma version from download.kde.org and every
+   Fedora/openSUSE family present in `copr/chroots.txt`.
+3. Updates `Version`, `%global commit` and the source checksum in the spec when
+   needed, and stores the last seen Plasma versions in `packaging/state.json`.
+4. Groups the chroots by their Plasma version, builds one source RPM per
+   distinct version and submits each SRPM only to its matching chroots.
 
 The scheduled run only submits a build when the upstream `main` commit or a KDE
 version changes. A manual dispatch always submits a build. Commits made by the
@@ -82,6 +87,9 @@ push.
 
 ## Packaging notes
 
+- The RPM `Release` is the target Plasma version, for example
+  `0.1.3-6.8.3.fc44` (no literal `plasma` prefix). A rebuild against a newer
+  Plasma ABI therefore always sorts as an upgrade.
 - Only the `nmccn` ion is built. The `qweather` ion needs per-user QWeather API
   credentials at configure time, so it is skipped by upstream CMake when those
   credentials are absent.

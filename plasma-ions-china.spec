@@ -4,7 +4,9 @@
 
 Name:           plasma-ions-china
 Version:        0.1.3
-Release:        1%{?dist}
+# The Plasma version is supplied per chroot by CI, so packages built against
+# different Plasma ABI versions also get different NEVRs.
+Release:        %{?plasma_version}%{!?plasma_version:0.0.0}%{?dist}
 Summary:        Plasma weather ion plugins for Chinese weather services
 License:        GPL-3.0-only
 URL:            https://github.com/arenekosreal/plasma-ions-china
@@ -73,5 +75,5 @@ API credentials at build time and is therefore not included in this package.
 %{_datadir}/locale/*/LC_MESSAGES/plasma_ions_china.mo
 
 %changelog
-* Wed Nov 25 2026 Plasma Ions China Packaging <plasma-ions-china@users.noreply.github.com> - 0.1.3-1
+* Wed Nov 25 2026 Plasma Ions China Packaging <plasma-ions-china@users.noreply.github.com> - 0.1.3-6.8.3
 - Initial COPR package.

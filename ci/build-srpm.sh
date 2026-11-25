@@ -9,6 +9,20 @@ mkdir -p "$outdir"
 outdir=$(realpath "$outdir")
 spec_name=$(basename "$spec")
 
+plasma_version=${PLASMA_VERSION:-}
+if [[ -z "$plasma_version" ]] && command -v rpm >/dev/null 2>&1; then
+    for package in plasma-workspace plasma6-workspace kdeplasma-addons; do
+        if value=$(rpm -q --qf '%{VERSION}' "$package" 2>/dev/null); then
+            plasma_version=$value
+            break
+        fi
+    done
+fi
+plasma_version=$(printf '%s' "${plasma_version:-0.0.0}" |
+    grep -oE '^[0-9]+(\.[0-9]+)*' | head -n 1 || true)
+plasma_version=${plasma_version:-0.0.0}
+echo "Building source RPM for Plasma ${plasma_version}..." >&2
+
 workdir=$(mktemp -d)
 trap 'rm -rf "$workdir"' EXIT
 
@@ -63,6 +77,7 @@ if [[ -n "$expected" ]]; then
 fi
 
 rpmbuild -bs "$workdir/$spec_name" \
+    --define "plasma_version $plasma_version" \
     --define "_sourcedir $workdir" \
     --define "_builddir $workdir/build" \
     --define "_buildrootdir $workdir/buildroot" \

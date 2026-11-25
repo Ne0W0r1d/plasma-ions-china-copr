@@ -1,6 +1,7 @@
 {
   "kde": {
     "fedora_44": "6.8.3",
+    "fedora_45": "6.8.1",
     "fedora_rawhide": "6.8.3",
     "opensuse_factory": "6.8.3",
     "stable": "6.8.3"

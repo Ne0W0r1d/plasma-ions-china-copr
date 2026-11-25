@@ -56,15 +56,21 @@ jobs:
       - name: Validate spec
         run: rpmspec -P plasma-ions-china.spec >/dev/null
 
-      - name: Build source RPM
+      - name: Build source RPMs per Plasma version
         if: github.event_name != 'schedule' || steps.sync.outputs.rebuild == 'true'
         id: srpm
         run: |
-          srpm=$(ci/build-srpm.sh plasma-ions-china.spec "$PWD/out")
-          echo "path=$srpm" >> "$GITHUB_OUTPUT"
+          mkdir -p "$PWD/out"
+          python3 ci/build-matrix.py \
+            --state packaging/state.json \
+            --chroots copr/chroots.txt \
+            --spec plasma-ions-china.spec \
+            --outdir "$PWD/out" > "$PWD/out/matrix.tsv"
+          cat "$PWD/out/matrix.tsv"
+          echo "matrix=$PWD/out/matrix.tsv" >> "$GITHUB_OUTPUT"
 
       - name: Configure COPR credentials
-        if: steps.srpm.outputs.path != ''
+        if: steps.srpm.outcome == 'success'
         run: |
           set -euo pipefail
           if [[ -z "${COPR_PROJECT:-}" ]]; then
@@ -81,22 +87,24 @@ jobs:
           copr-cli whoami >/dev/null
 
       - name: Ensure COPR project and chroots
-        if: steps.srpm.outputs.path != ''
+        if: steps.srpm.outcome == 'success'
         run: copr/setup-project.sh "$COPR_PROJECT"
 
       - name: Submit COPR build
-        if: steps.srpm.outputs.path != ''
+        if: steps.srpm.outcome == 'success'
         id: submit
         run: |
           set -euo pipefail
-          args=()
-          while IFS= read -r chroot; do
-            case "$chroot" in
-              ''|'#'*) continue ;;
-            esac
-            args+=(-r "$chroot")
-          done < copr/chroots.txt
-          copr-cli build "${args[@]}" "$COPR_PROJECT" "${{ steps.srpm.outputs.path }}"
+          while IFS=$'\t' read -r plasma_version chroots srpm; do
+            [[ -n "$srpm" && "$srpm" != "-" ]] || continue
+            args=()
+            IFS=',' read -r -a group <<< "$chroots"
+            for chroot in "${group[@]}"; do
+              args+=(-r "$chroot")
+            done
+            echo "Submitting ${srpm} for Plasma ${plasma_version}..." >&2
+            copr-cli build "${args[@]}" "$COPR_PROJECT" "$srpm"
+          done < "$PWD/out/matrix.tsv"
 
       # Commit only after COPR accepted the build (or when no rebuild was
       # needed). If a build fails, the next scheduled run retries it.
